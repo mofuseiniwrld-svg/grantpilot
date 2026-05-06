@@ -1,18 +1,11 @@
-"""Portal adapters registry."""
 from .awardsplatform import AwardsPlatformAdapter
 from .submittable import SubmittableAdapter
+from .fluxx import FluxxAdapter
 
-ADAPTERS = {
+ADAPTERS: dict = {
     "awardsplatform": AwardsPlatformAdapter,
     "submittable": SubmittableAdapter,
+    "fluxx": FluxxAdapter,
 }
 
-def get_adapter(name: str):
-    adapter_cls = ADAPTERS.get(name)
-    if not adapter_cls:
-        raise ValueError(
-            f"Unknown portal: {name!r}\n"
-            f"Available: {list(ADAPTERS.keys())}\n"
-            f"To add a new portal: subclass BaseAdapter in grantpilot/adapters/"
-        )
-    return adapter_cls()
+__all__ = ["ADAPTERS", "AwardsPlatformAdapter", "SubmittableAdapter", "FluxxAdapter"]
