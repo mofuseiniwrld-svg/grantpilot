@@ -1,86 +1,109 @@
-"""
-AI-powered form field mapper.
+"""LLM-powered form filler — fallback for portals without a dedicated adapter.
 
-When a portal's field names don't match the adapter's selectors,
-the AI mapper scans the live DOM and maps profile fields to real inputs.
-
-This is the "smart fill" path — the adapters are the "fast path".
+Scans the live DOM, extracts all form fields, uses an LLM to map profile values
+to each field, then fills them. Never submits automatically.
 """
 import json
-from ..profile import Profile
+from typing import Any
+from playwright.async_api import Page
 
 
-SYSTEM_PROMPT = """You are a form-filling assistant. Given:
-1. A JSON user profile
-2. A list of form fields (label, name, type, placeholder)
+class AIFormFiller:
+    """Use when there is no dedicated adapter for the target portal."""
 
-Return a JSON mapping of { "field_name_or_id": "value_from_profile" }.
-Only include fields you can confidently fill. Do not invent data."""
+    def __init__(self, profile: dict[str, Any], model: str = "gpt-4o-mini") -> None:
+        self.profile = profile
+        self.model = model
 
+    async def fill(self, page: Page) -> None:
+        """Scan DOM -> map via LLM -> fill -> stop before submit."""
+        await page.wait_for_load_state("networkidle")
+        fields = await self._extract_fields(page)
+        if not fields:
+            print("No form fields found on this page.")
+            return
+        print(f"Found {len(fields)} form fields. Mapping with LLM...")
+        mappings = await self._map_fields_via_llm(fields)
+        print(f"Filling {len(mappings)} matched fields...")
+        await self._apply_mappings(page, mappings)
+        await self._stop_before_submit(page)
 
-async def ai_map_fields(page, profile: Profile, llm_fn) -> dict:
-    """
-    Scan the page for form fields, ask LLM to map them to profile values.
-    llm_fn: async callable(prompt: str) -> str
-    """
-    # Extract all visible form fields from the DOM
-    fields = await page.evaluate("""() => {
-        return [...document.querySelectorAll(
-            "input:not([type=hidden]):not([type=submit]):not([type=button]), textarea, select"
-        )].map(el => ({
-            tag: el.tagName,
-            type: el.type || "",
-            name: el.name || "",
-            id: el.id || "",
-            placeholder: el.placeholder || "",
-            label: (() => {
-                const lbl = document.querySelector(`label[for="${el.id}"]`);
-                return lbl ? lbl.textContent.trim() : "";
-            })(),
-            options: el.tagName === "SELECT"
-                ? [...el.options].map(o => o.text).slice(0, 20)
-                : [],
-        }));
-    }""")
+    # ------------------------------------------------------------------ private
 
-    prompt = f"""Profile:
-{json.dumps(profile.model_dump(), indent=2)}
+    async def _extract_fields(self, page: Page) -> list[dict]:
+        return await page.evaluate("""
+            () => {
+                const fields = [];
+                const inputs = document.querySelectorAll(
+                    'input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]),'
+                    + 'textarea, select'
+                );
+                inputs.forEach(el => {
+                    const label = el.id
+                        ? document.querySelector('label[for="' + el.id + '"]')
+                        : null;
+                    fields.push({
+                        tag:         el.tagName.toLowerCase(),
+                        type:        el.type || '',
+                        name:        el.name || '',
+                        id:          el.id || '',
+                        placeholder: el.placeholder || '',
+                        label:       label ? label.textContent.trim() : '',
+                        required:    el.required,
+                    });
+                });
+                return fields;
+            }
+        """)
 
-Form fields:
-{json.dumps(fields, indent=2)}
+    async def _map_fields_via_llm(self, fields: list[dict]) -> list[dict]:
+        try:
+            import openai  # optional dependency
+            client = openai.AsyncOpenAI()
+            prompt = (
+                "Map the user profile to HTML form fields.\n\n"
+                f"Profile:\n{json.dumps(self.profile, indent=2)}\n\n"
+                f"Form fields:\n{json.dumps(fields, indent=2)}\n\n"
+                "Output a JSON array: [{\"selector\": \"<CSS selector>\", \"value\": \"<value from profile>\"}]\n"
+                "Build selectors from name, id, or placeholder attributes.\n"
+                "Only include fields where you can confidently match a value.\n"
+                "Return ONLY valid JSON, no explanation."
+            )
+            resp = await client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = resp.choices[0].message.content.strip()
+            # Strip markdown fences if present
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            result = json.loads(raw)
+            return result if isinstance(result, list) else []
+        except Exception as exc:
+            print(f"LLM mapping failed ({exc}). Fill manually.")
+            return []
 
-Return JSON mapping {{field_name: value}}."""
-
-    response = await llm_fn(prompt)
-
-    try:
-        start = response.index("{")
-        end = response.rindex("}") + 1
-        return json.loads(response[start:end])
-    except Exception:
-        return {}
-
-
-async def apply_ai_mapping(page, mapping: dict) -> None:
-    """Apply the LLM-generated field mapping to the page."""
-    for field_id_or_name, value in mapping.items():
-        if not value:
-            continue
-        selectors = [
-            f'[name="{field_id_or_name}"]',
-            f'[id="{field_id_or_name}"]',
-        ]
-        for sel in selectors:
-            try:
-                loc = page.locator(sel).first
-                if await loc.count() > 0:
-                    tag = await loc.evaluate("el => el.tagName.toLowerCase()")
-                    if tag == "select":
-                        await loc.select_option(label=str(value))
-                    elif tag == "textarea":
-                        await loc.fill(str(value))
-                    else:
-                        await loc.fill(str(value))
-                    break
-            except Exception:
+    async def _apply_mappings(self, page: Page, mappings: list[dict]) -> None:
+        for m in mappings:
+            sel, val = m.get("selector"), m.get("value")
+            if not sel or not val:
                 continue
+            try:
+                await page.fill(sel, str(val))
+                print(f"  filled  {sel[:60]} = {str(val)[:50]}")
+            except Exception as exc:
+                print(f"  skipped {sel[:60]} ({exc})")
+
+    async def _stop_before_submit(self, page: Page) -> None:
+        await page.evaluate("""
+            () => {
+                document.querySelectorAll(
+                    'button[type=submit],input[type=submit]'
+                ).forEach(b => {
+                    b.style.outline = '3px solid #ff3b30';
+                    b.style.boxShadow = '0 0 12px #ff3b30';
+                });
+            }
+        """)
+        print("\n\u2705  AI fill complete. Review the browser, then click Submit.")
+        input("Press ENTER to close without submitting...\n")
