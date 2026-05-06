@@ -1,7 +1,7 @@
 {
   "personal": {
     "full_name": "Fuseini Mohammed",
-    "email": "mofuseini.wrld@gmail.com",
+    "email": "your@email.com",
     "country": "Ghana",
     "institution": "KNUST",
     "degree": "MSc Computer Science (AI)",
@@ -10,14 +10,13 @@
   },
   "research": {
     "area": "AI Governance, Policy, West Africa",
-    "thematic_area": "AI, Information Integrity and Democratic Governance",
-    "title": "Governing AI in the Absence of Governance: Regulatory Capacity for West Africa",
-    "abstract": "This proposal examines the structural constraints on AI governance in West African states, with particular focus on Ghana and Nigeria. Drawing on comparative regulatory theory and primary fieldwork, it argues that effective AI governance requires not just legal frameworks but deep institutional capacity \u2014 a resource currently lacking across the region. The research develops a capacity-indexed governance model applicable across low-resource regulatory contexts."
+    "title": "Your Project Title Here",
+    "abstract": "A 250-word abstract describing your research or project."
   },
   "essays": {
-    "motivation": "AI governance in Africa is being shaped by external frameworks designed for entirely different institutional contexts. My work at SankofaAI over seven years has shown me that without locally-grounded capacity building, even the best-designed regulations fail at implementation. This fellowship is the ideal platform to develop policy tools that are both technically rigorous and institutionally feasible for West African governments.",
-    "impact": "This research will produce: (1) a governance capacity assessment framework validated across three West African regulatory agencies, (2) a set of model AI policy provisions adapted for low-resource implementation contexts, and (3) direct policy recommendations delivered to ECOWAS AI Working Group. Longer-term, it seeds a regional AI governance research network.",
-    "methodology": "Mixed-methods: regulatory document analysis across 15 ECOWAS states, semi-structured interviews with 30+ regulators and civil society actors, and three case studies of AI deployment attempts (fintech, health, agriculture) where governance gaps caused harm or failure."
+    "motivation": "Why you are applying and what drives this work.",
+    "impact": "The concrete impact this work will have.",
+    "methodology": "How you will achieve the stated goals."
   },
   "references": [
     {
@@ -30,11 +29,6 @@
   "documents": {
     "cv": "docs/cv.pdf",
     "writing_sample": "docs/writing_sample.pdf",
-    "research_proposal": "",
-    "transcript": ""
-  },
-  "extras": {
-    "entry_name": "Mohammed_1",
-    "target_fellowship": "Mila AI Policy Fellowship"
+    "research_proposal": "docs/proposal.pdf"
   }
 }
