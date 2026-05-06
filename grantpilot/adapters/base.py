@@ -1,56 +1,70 @@
-"""Base adapter — inherit to add support for a new grant portal."""
-from abc import ABC, abstractmethod
-from pathlib import Path
+"""Base adapter class — inherit this to add a new grant portal."""
+import abc
+from typing import Any
 from playwright.async_api import Page
-from ..profile import Profile
 
 
-class BaseAdapter(ABC):
-    name: str = "base"
+class BaseAdapter(abc.ABC):
+    """Inherit and implement fill() to support a new portal."""
+
+    name: str = ""
     login_url: str = ""
 
-    async def login(self, page: Page, email: str, password: str) -> None:
-        """Default login flow — override if portal is non-standard."""
-        await page.goto(self.login_url)
-        await page.wait_for_load_state("networkidle")
-        await page.fill('input[type="email"], input[name="email"]', email)
-        await page.fill('input[type="password"]', password)
-        await page.click('button[type="submit"], input[type="submit"]')
-        await page.wait_for_load_state("networkidle")
+    def __init__(self, profile: dict[str, Any]) -> None:
+        self.profile = profile
 
-    @abstractmethod
-    async def fill(self, page: Page, profile: Profile) -> None:
-        """Fill all form fields. Must call stop_before_submit() at the end."""
+    @abc.abstractmethod
+    async def fill(self, page: Page) -> None:
+        """Fill all form fields with profile data."""
         ...
 
+    # ------------------------------------------------------------------ helpers
+
     async def upload_file(self, page: Page, selector: str, file_path: str) -> None:
-        """Upload a file to an input[type=file] element."""
-        if not file_path or not Path(file_path).exists():
-            print(f"  [skip] File not found: {file_path}")
-            return
-        async with page.expect_file_chooser() as fc_info:
-            await page.click(selector)
-        file_chooser = await fc_info.value
-        await file_chooser.set_files(file_path)
+        """Upload a local file to a <input type=file> element."""
+        if file_path:
+            try:
+                await page.set_input_files(selector, file_path)
+            except Exception:
+                pass
 
     async def stop_before_submit(self, page: Page) -> None:
+        """Highlight the submit button and wait for the user to click it.
+
+        GrantPilot NEVER auto-submits — the human always makes the final call.
         """
-        Pause for human review. NEVER auto-submit.
-        Highlights the submit button so the user can find it easily.
-        """
-        print()
-        print("=" * 60)
-        print("  GrantPilot: Form filled. Review and submit manually.")
-        print("  Browser will stay open until you close it.")
-        print("=" * 60)
-        # Highlight submit button
         await page.evaluate("""
-            const btns = [...document.querySelectorAll(
-                'button[type="submit"], input[type="submit"], button'
-            )].filter(b => /submit|apply|send/i.test(b.textContent));
-            btns.forEach(b => {
-                b.style.outline = "4px solid #00ff88";
-                b.style.boxShadow = "0 0 20px #00ff88";
-            });
+            () => {
+                const btns = document.querySelectorAll(
+                    'button[type=submit], input[type=submit], [data-testid*="submit"]'
+                );
+                btns.forEach(btn => {
+                    btn.style.outline = '3px solid #ff3b30';
+                    btn.style.boxShadow = '0 0 12px #ff3b30';
+                    btn.title = 'GrantPilot: review & click when ready';
+                });
+            }
         """)
-        await page.pause()  # Opens Playwright Inspector for manual control
+        print("\n✅  Form filled. Review the browser then click Submit.")
+        print("    Press ENTER here to close without submitting.\n")
+        input()
+
+    async def _fill_if_exists(self, page: Page, selector: str, value: str) -> None:
+        """Fill the first matching element; silently skip if absent or empty."""
+        if not value:
+            return
+        try:
+            loc = page.locator(selector).first
+            if await loc.count() > 0:
+                await loc.fill(value)
+        except Exception:
+            pass
+
+    async def _fill_by_label(self, page: Page, label_text: str, value: str) -> None:
+        """Fill an input associated with a label containing label_text."""
+        if not value:
+            return
+        try:
+            await page.get_by_label(label_text, exact=False).fill(value)
+        except Exception:
+            pass
