@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "grantpilot"
+version = "0.1.0"
+description = "Local-first AI agent for grant and fellowship applications — bypasses bot detection by running on your machine"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Fuseini Mohammed", email = "mofuseini.wrld@gmail.com" }]
+keywords = ["grants", "fellowships", "automation", "playwright", "ai", "forms"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "playwright>=1.40.0",
+    "click>=8.1.0",
+    "pydantic>=2.0.0",
+    "openai>=1.0.0",
+    "anthropic>=0.20.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "browser-cookie3>=0.19.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "black", "ruff"]
+
+[project.scripts]
+grantpilot = "grantpilot.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/mofuseiniwrld-svg/grantpilot"
+Issues = "https://github.com/mofuseiniwrld-svg/grantpilot/issues"
